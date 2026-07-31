@@ -10,6 +10,10 @@ Como pegar um ID no Discord:
 
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # ------------------------------------------------------------------
 # TOKEN DO BOT
 # Recomendado: definir a variável de ambiente DISCORD_TOKEN em vez de
