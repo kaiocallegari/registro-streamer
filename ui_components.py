@@ -72,24 +72,28 @@ class RegistrarMetaModal(discord.ui.Modal, title="Registro de Meta"):
     nome_rp = discord.ui.TextInput(
         label="NOME RP",
         style=discord.TextStyle.short,
+        placeholder="ex: skyler",
         max_length=50,
         required=True,
     )
     id_rp = discord.ui.TextInput(
         label="ID RP",
         style=discord.TextStyle.short,
+        placeholder="ex: 158",
         max_length=20,
         required=True,
     )
     dia = discord.ui.TextInput(
-        label="DIA DA LIVE (hoje ou ontem)",
+        label="DIA DA LIVE",
         style=discord.TextStyle.short,
+        placeholder="ex: 01/08",
         max_length=10,
         required=True,
     )
     horas_feitas = discord.ui.TextInput(
         label="HORAS FEITAS",
         style=discord.TextStyle.short,
+        placeholder="ex: 3.40",
         max_length=6,
         required=True,
     )
@@ -318,7 +322,7 @@ def _opcoes_ranking(emoji_ciclo: str, emoji_semana: str):
     """Gera as 8 opções (ciclo/semana x tier4..tier1) na ordem 4, 3, 2, 1."""
     opcoes = []
     for periodo, emoji in (("ciclo", emoji_ciclo), ("semana", emoji_semana)):
-        rotulo_periodo = "Ciclo Atual" if periodo == "ciclo" else "Semanal"
+        rotulo_periodo = "Ciclo Mensal" if periodo == "ciclo" else "Semanal"
         for tier in ORDEM_TIERS:
             opcoes.append(
                 discord.SelectOption(

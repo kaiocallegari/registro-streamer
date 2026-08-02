@@ -45,7 +45,7 @@ async def enviar_painel(interaction: discord.Interaction):
         return
 
     embed = discord.Embed(
-        title="📊 Registro de Metas — Lisboa Criadores",
+        title="📊 Registro de Metas — Alta Criadores",
         description=(
             "🔄 O ranking reseta mensalmente via `/resetar_ranking`.\n\n"
             "📊 **Registrar Meta** — envie o registro da sua live.\n"
