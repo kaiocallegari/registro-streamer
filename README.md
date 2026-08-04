@@ -77,6 +77,20 @@ Isso publica a mensagem com os 3 botões, exatamente como no exemplo que você m
 
 O **Ver Ranking** agora é paginado: mostra 15 pessoas por página (configurável em `TAMANHO_PAGINA_RANKING`), com botões **◀️ Anterior** e **Próxima ▶️** para navegar. Isso evita o problema de a mensagem estourar o limite de caracteres do Discord quando o servidor tem muitos criadores ativos — suporta até `TAMANHO_RANKING` pessoas no total (padrão: 200).
 
+## Persistência dos dados no Railway (evitar perder dados no redeploy)
+
+Por padrão, o sistema de arquivos de um serviço no Railway é **efêmero**: a cada redeploy, o container é recriado do zero e qualquer arquivo que não esteja num Volume é apagado — incluindo o `metas.db`. Para os dados sobreviverem aos redeploys:
+
+1. No painel do Railway, abra o serviço do bot → aba **Volumes** → **New Volume**.
+2. Defina um *mount path*, por exemplo `/data`.
+3. Nas variáveis de ambiente do serviço, defina:
+   ```
+   DB_PATH=/data/metas.db
+   ```
+4. Faça o redeploy. A partir daí, o `metas.db` passa a viver dentro do Volume e continua existindo mesmo quando o container é recriado.
+
+Se `DB_PATH` não for definido, o padrão continua sendo `metas.db` na pasta do projeto (ok para rodar localmente, mas não persiste em produção sem Volume).
+
 ## Observações importantes
 
 - O **ranking mensal reseta sozinho automaticamente**, pois é sempre calculado com base no mês atual — não precisa apagar nada na virada do mês. O comando `/resetar_ranking` serve para forçar uma limpeza manual/antecipada, se precisar.

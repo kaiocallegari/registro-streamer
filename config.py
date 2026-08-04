@@ -63,5 +63,8 @@ TAMANHO_PAGINA_RANKING = 15
 
 # ------------------------------------------------------------------
 # BANCO DE DADOS
+# Em produção (ex: Railway), defina DB_PATH apontando para dentro de um
+# Volume persistente (ex: /data/metas.db). Sem isso, o arquivo é apagado
+# a cada redeploy, pois o sistema de arquivos do container é efêmero.
 # ------------------------------------------------------------------
-DB_PATH = "metas.db"
+DB_PATH = os.getenv("DB_PATH", "metas.db")
