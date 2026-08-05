@@ -9,7 +9,7 @@ from discord.ext import commands
 
 import config
 import database
-from ui_components import PainelMetasView, ResetarRankingView, eh_admin
+from ui_components import PainelMetasView, ResetarRankingView, eh_admin, eh_admin_servidor
 
 # ------------------------------------------------------------------
 # Intents necessárias
@@ -66,9 +66,9 @@ async def enviar_painel(interaction: discord.Interaction):
     description="Reseta o ranking de um período/tipo específico (uso administrativo).",
 )
 async def resetar_ranking(interaction: discord.Interaction):
-    if not eh_admin(interaction.user):
+    if not eh_admin_servidor(interaction.user):
         await interaction.response.send_message(
-            "❌ Você não tem permissão para usar isso.", ephemeral=True
+            "❌ Só administradores do servidor podem usar isso.", ephemeral=True
         )
         return
 

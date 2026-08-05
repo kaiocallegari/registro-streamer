@@ -65,6 +65,12 @@ def eh_admin(member: discord.Member) -> bool:
     return any(cargo_id in cargos_ids for cargo_id in config.CARGO_ADMIN_IDS)
 
 
+def eh_admin_servidor(member: discord.Member) -> bool:
+    """Verifica se o membro tem a permissão de Administrador do servidor
+    (mais restrito que eh_admin — usado em ações destrutivas como resetar o ranking)."""
+    return member.guild_permissions.administrator
+
+
 # ====================================================================
 # Formulário (Modal) de Registro de Meta
 # ====================================================================
@@ -429,7 +435,7 @@ class ConfirmarResetView(discord.ui.View):
 
     @discord.ui.button(label="✅ Confirmar reset", style=discord.ButtonStyle.danger)
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not eh_admin(interaction.user):
+        if not eh_admin_servidor(interaction.user):
             await interaction.response.send_message(
                 "❌ Você não tem permissão para usar isso.", ephemeral=True
             )
@@ -443,7 +449,7 @@ class ConfirmarResetView(discord.ui.View):
 
     @discord.ui.button(label="❌ Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not eh_admin(interaction.user):
+        if not eh_admin_servidor(interaction.user):
             await interaction.response.send_message(
                 "❌ Você não tem permissão para usar isso.", ephemeral=True
             )
@@ -464,9 +470,9 @@ class ResetarRankingView(discord.ui.View):
         options=_opcoes_ranking("🔄", "🔄"),
     )
     async def selecionar(self, interaction: discord.Interaction, select: discord.ui.Select):
-        if not eh_admin(interaction.user):
+        if not eh_admin_servidor(interaction.user):
             await interaction.response.send_message(
-                "❌ Você não tem permissão para usar isso.", ephemeral=True
+                "❌ Só administradores do servidor podem usar isso.", ephemeral=True
             )
             return
 
