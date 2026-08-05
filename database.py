@@ -8,8 +8,18 @@ Usa SQLite (arquivo local, sem necessidade de servidor externo).
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import config
+
+# O servidor (Railway) roda em UTC, mas os ciclos/semanas de meta devem
+# seguir o horário de Brasília — senão registros feitos à noite (principalmente
+# perto da virada do mês/semana) contam pro período errado.
+FUSO_HORARIO = ZoneInfo("America/Sao_Paulo")
+
+
+def agora() -> datetime:
+    return datetime.now(FUSO_HORARIO)
 
 
 # ------------------------------------------------------------------
@@ -52,11 +62,11 @@ def init_db():
 # Helpers de período
 # ------------------------------------------------------------------
 def ciclo_atual() -> str:
-    return datetime.now().strftime("%m/%Y")
+    return agora().strftime("%m/%Y")
 
 
 def semana_atual() -> str:
-    ano, semana, _ = datetime.now().isocalendar()
+    ano, semana, _ = agora().isocalendar()
     return f"{ano}-W{semana:02d}"
 
 
@@ -89,7 +99,7 @@ def registrar_meta(
                 print_url,
                 ciclo_atual(),
                 semana_atual(),
-                datetime.now().isoformat(timespec="seconds"),
+                agora().isoformat(timespec="seconds"),
             ),
         )
 
