@@ -419,6 +419,40 @@ class SelecionarRankingView(discord.ui.View):
 
 
 # ====================================================================
+# Confirmação usada antes de apagar de fato os registros
+# ====================================================================
+class ConfirmarResetView(discord.ui.View):
+    def __init__(self, tipo: str, periodo: str):
+        super().__init__(timeout=60)
+        self.tipo = tipo
+        self.periodo = periodo
+
+    @discord.ui.button(label="✅ Confirmar reset", style=discord.ButtonStyle.danger)
+    async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not eh_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para usar isso.", ephemeral=True
+            )
+            return
+
+        apagados = database.resetar_periodo(self.tipo, self.periodo)
+        await interaction.response.edit_message(
+            content=f"✅ Ranking resetado! ({apagados} registros removidos)",
+            view=None,
+        )
+
+    @discord.ui.button(label="❌ Cancelar", style=discord.ButtonStyle.secondary)
+    async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not eh_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para usar isso.", ephemeral=True
+            )
+            return
+
+        await interaction.response.edit_message(content="🚫 Reset cancelado.", view=None)
+
+
+# ====================================================================
 # Seletor usado pelo comando administrativo /resetar_ranking
 # ====================================================================
 class ResetarRankingView(discord.ui.View):
@@ -437,8 +471,11 @@ class ResetarRankingView(discord.ui.View):
             return
 
         periodo, tipo = select.values[0].split(":")
-        apagados = database.resetar_periodo(tipo, periodo)
+        rotulo_periodo = "Ciclo Mensal" if periodo == "ciclo" else "Semanal"
         await interaction.response.edit_message(
-            content=f"✅ Ranking resetado! ({apagados} registros removidos)",
-            view=None,
+            content=(
+                f"⚠️ Tem certeza que quer resetar **{rotulo_periodo} — {NOME_TIPO[tipo]}**?\n"
+                "Essa ação apaga os registros permanentemente e não pode ser desfeita."
+            ),
+            view=ConfirmarResetView(tipo, periodo),
         )
