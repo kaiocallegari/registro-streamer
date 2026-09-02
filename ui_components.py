@@ -72,6 +72,18 @@ def eh_admin_servidor(member: discord.Member) -> bool:
 
 
 # ====================================================================
+# Canal de log geral (todo comando/ação usado no bot é registrado aqui)
+# ====================================================================
+async def registrar_log(interaction: discord.Interaction, descricao: str) -> None:
+    """Manda uma linha de log pro canal geral (config.CANAL_LOG_COMANDOS_ID)
+    com quem fez o quê."""
+    canal_log = interaction.client.get_channel(config.CANAL_LOG_COMANDOS_ID)
+    if canal_log:
+        canal_origem = f" em {interaction.channel.mention}" if interaction.channel else ""
+        await canal_log.send(f"🔹 {interaction.user.mention} — {descricao}{canal_origem}")
+
+
+# ====================================================================
 # Formulário (Modal) de Registro de Meta
 # ====================================================================
 class RegistrarMetaModal(discord.ui.Modal, title="Registro de Meta"):
@@ -215,6 +227,11 @@ class RegistrarMetaModal(discord.ui.Modal, title="Registro de Meta"):
         except (discord.Forbidden, discord.NotFound):
             pass
 
+        await registrar_log(
+            interaction,
+            f"registrou uma meta (**{NOME_TIPO[self.tipo]}**, {formatar_horas(horas)}, dia {self.dia.value.strip()})",
+        )
+
 
 # ====================================================================
 # Seletor de tipo (usado só se o usuário não tiver nenhum cargo de tier)
@@ -262,6 +279,7 @@ class PainelMetasView(discord.ui.View):
             )
             return
         await interaction.response.send_modal(RegistrarMetaModal(tipo=tipo))
+        await registrar_log(interaction, "clicou em **Registrar Meta**")
 
     @discord.ui.button(
         label="Meu Progresso",
@@ -309,6 +327,7 @@ class PainelMetasView(discord.ui.View):
         embed.set_footer(text="Só você pode ver esta mensagem")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        await registrar_log(interaction, "consultou **Meu Progresso**")
 
     @discord.ui.button(
         label="Ver Ranking",
@@ -322,6 +341,7 @@ class PainelMetasView(discord.ui.View):
             view=SelecionarRankingView(),
             ephemeral=True,
         )
+        await registrar_log(interaction, "abriu **Ver Ranking**")
 
 
 def _opcoes_ranking(emoji_ciclo: str, emoji_semana: str):
@@ -423,6 +443,9 @@ class SelecionarRankingView(discord.ui.View):
         )
         await interaction.response.edit_message(content=None, embed=embed, view=paginador)
 
+        rotulo_periodo = "Ciclo Mensal" if periodo == "ciclo" else "Semanal"
+        await registrar_log(interaction, f"visualizou o ranking **{rotulo_periodo} — {NOME_TIPO[tipo]}**")
+
 
 # ====================================================================
 # Confirmação usada antes de apagar de fato os registros
@@ -447,6 +470,13 @@ class ConfirmarResetView(discord.ui.View):
             view=None,
         )
 
+        rotulo_periodo = "Ciclo Mensal" if self.periodo == "ciclo" else "Semanal"
+        await registrar_log(
+            interaction,
+            f"⚠️ **RESETOU** o ranking **{rotulo_periodo} — {NOME_TIPO[self.tipo]}** "
+            f"({apagados} registros apagados)",
+        )
+
     @discord.ui.button(label="❌ Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not eh_admin_servidor(interaction.user):
@@ -456,6 +486,11 @@ class ConfirmarResetView(discord.ui.View):
             return
 
         await interaction.response.edit_message(content="🚫 Reset cancelado.", view=None)
+
+        rotulo_periodo = "Ciclo Mensal" if self.periodo == "ciclo" else "Semanal"
+        await registrar_log(
+            interaction, f"cancelou o reset de **{rotulo_periodo} — {NOME_TIPO[self.tipo]}**"
+        )
 
 
 # ====================================================================
@@ -484,4 +519,8 @@ class ResetarRankingView(discord.ui.View):
                 "Essa ação apaga os registros permanentemente e não pode ser desfeita."
             ),
             view=ConfirmarResetView(tipo, periodo),
+        )
+        await registrar_log(
+            interaction,
+            f"selecionou resetar **{rotulo_periodo} — {NOME_TIPO[tipo]}** (aguardando confirmação)",
         )

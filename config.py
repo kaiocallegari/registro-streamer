@@ -45,6 +45,10 @@ CANAL_LOG_TIER_3_ID = 1471278255880278180   # canal de log do Tier 3
 CANAL_LOG_TIER_2_ID = 1465837678002966704   # canal de log do Tier 2
 CANAL_LOG_TIER_1_ID = 1465837677470552125   # canal de log do Tier 1
 
+# Canal de log geral — todo comando/ação usado no bot é registrado aqui
+# (registrar meta, ver progresso, ver ranking, resetar ranking, etc.)
+CANAL_LOG_COMANDOS_ID = 0   # TODO: substituir pelo ID do canal desejado
+
 # ------------------------------------------------------------------
 # REGRAS DE META
 # ------------------------------------------------------------------

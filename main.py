@@ -9,7 +9,13 @@ from discord.ext import commands
 
 import config
 import database
-from ui_components import PainelMetasView, ResetarRankingView, eh_admin, eh_admin_servidor
+from ui_components import (
+    PainelMetasView,
+    ResetarRankingView,
+    eh_admin,
+    eh_admin_servidor,
+    registrar_log,
+)
 
 # ------------------------------------------------------------------
 # Intents necessárias
@@ -56,6 +62,7 @@ async def enviar_painel(interaction: discord.Interaction):
     )
     await interaction.channel.send(embed=embed, view=PainelMetasView())
     await interaction.response.send_message("✅ Painel publicado!", ephemeral=True)
+    await registrar_log(interaction, "usou **/enviar_painel**")
 
 
 # ------------------------------------------------------------------
@@ -77,6 +84,7 @@ async def resetar_ranking(interaction: discord.Interaction):
         view=ResetarRankingView(),
         ephemeral=True,
     )
+    await registrar_log(interaction, "usou **/resetar_ranking**")
 
 
 if __name__ == "__main__":
