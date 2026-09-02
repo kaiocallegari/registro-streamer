@@ -2,8 +2,8 @@
 admin_config.py
 -----------------
 Comando /config — painel de configuração administrativa do bot.
-Só aparece pra quem tem permissão de Administrador no servidor (o próprio
-Discord já esconde o comando de quem não tem essa permissão).
+Liberado pra quem tem permissão de Administrador do servidor OU um dos
+cargos admin extra configurados (mesma regra usada em /enviar_painel).
 """
 
 from typing import Optional
@@ -12,7 +12,7 @@ import discord
 from discord import app_commands
 
 import config_runtime
-from ui_components import NOME_TIPO, ORDEM_TIERS, eh_admin_servidor, registrar_log
+from ui_components import NOME_TIPO, ORDEM_TIERS, eh_admin, registrar_log
 
 OPCOES_TIER = [app_commands.Choice(name=NOME_TIPO[t], value=t) for t in ORDEM_TIERS]
 
@@ -262,15 +262,14 @@ class CentralConfigView(discord.ui.View):
         await interaction.response.edit_message(embed=_construir_embed_config(), view=vistas[area]())
 
 
-@app_commands.default_permissions(administrator=True)
 class ConfigGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="config", description="Configurações administrativas do bot.")
 
     async def _checar_admin(self, interaction: discord.Interaction) -> bool:
-        if not eh_admin_servidor(interaction.user):
+        if not eh_admin(interaction.user):
             await interaction.response.send_message(
-                "❌ Só administradores do servidor podem usar isso.", ephemeral=True
+                "❌ Você não tem permissão para usar isso.", ephemeral=True
             )
             return False
         return True
