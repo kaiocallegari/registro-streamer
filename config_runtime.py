@@ -83,6 +83,10 @@ def remover_cargo_admin(cargo_id: int) -> list[int]:
     return atuais
 
 
+def definir_cargo_admin_ids(ids: list[int]) -> None:
+    database.set_config("cargo_admin_ids", json.dumps(ids))
+
+
 def meta_minima_horas() -> float:
     valor = database.get_config("meta_minima_horas")
     return float(valor) if valor else config.META_MINIMA_HORAS
