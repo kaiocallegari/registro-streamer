@@ -9,6 +9,7 @@ from discord.ext import commands
 
 import config
 import database
+from admin_config import ConfigGroup
 from ui_components import (
     PainelMetasView,
     ResetarRankingView,
@@ -25,6 +26,7 @@ intents.message_content = True  # necessário para capturar o print comprovante
 intents.members = True          # necessário para ler os cargos do usuário
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot.tree.add_command(ConfigGroup())
 
 
 @bot.event

@@ -37,7 +37,7 @@ def get_conn():
 
 
 def init_db():
-    """Cria a tabela de registros caso ainda não exista."""
+    """Cria as tabelas caso ainda não existam."""
     with get_conn() as conn:
         conn.execute(
             """
@@ -55,6 +55,36 @@ def init_db():
                 criado_em TEXT NOT NULL
             )
             """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS configuracoes (
+                chave TEXT PRIMARY KEY,
+                valor TEXT NOT NULL
+            )
+            """
+        )
+
+
+# ------------------------------------------------------------------
+# Configurações editáveis via /config (sobrescrevem os padrões de config.py)
+# ------------------------------------------------------------------
+def get_config(chave: str) -> str | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT valor FROM configuracoes WHERE chave = ?", (chave,)
+        ).fetchone()
+    return row["valor"] if row else None
+
+
+def set_config(chave: str, valor: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO configuracoes (chave, valor) VALUES (?, ?)
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor
+            """,
+            (chave, valor),
         )
 
 

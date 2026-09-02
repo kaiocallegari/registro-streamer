@@ -12,6 +12,7 @@ from datetime import datetime
 import discord
 
 import config
+import config_runtime
 import database
 
 
@@ -34,25 +35,13 @@ def barra_progresso(horas: float, meta: float, tamanho: int = 10) -> str:
 # Ordem de exibição dos tiers: 4, 3, 2, 1 (do mais baixo para o mais alto)
 ORDEM_TIERS = ["tier4", "tier3", "tier2", "tier1"]
 NOME_TIPO = {"tier4": "Tier 4", "tier3": "Tier 3", "tier2": "Tier 2", "tier1": "Tier 1"}
-CARGO_POR_TIER = {
-    "tier4": config.CARGO_TIER_4_ID,
-    "tier3": config.CARGO_TIER_3_ID,
-    "tier2": config.CARGO_TIER_2_ID,
-    "tier1": config.CARGO_TIER_1_ID,
-}
-CANAL_LOG_POR_TIER = {
-    "tier4": config.CANAL_LOG_TIER_4_ID,
-    "tier3": config.CANAL_LOG_TIER_3_ID,
-    "tier2": config.CANAL_LOG_TIER_2_ID,
-    "tier1": config.CANAL_LOG_TIER_1_ID,
-}
 
 
 async def determinar_tipo(interaction: discord.Interaction) -> str | None:
     """Descobre o tier do usuário (tier4, tier3, tier2 ou tier1) pelos cargos dele."""
     cargos_ids = [r.id for r in interaction.user.roles]
     for tier in ORDEM_TIERS:
-        if CARGO_POR_TIER[tier] in cargos_ids:
+        if config_runtime.cargo_tier(tier) in cargos_ids:
             return tier
     return None
 
@@ -62,7 +51,7 @@ def eh_admin(member: discord.Member) -> bool:
     if member.guild_permissions.administrator:
         return True
     cargos_ids = {r.id for r in member.roles}
-    return any(cargo_id in cargos_ids for cargo_id in config.CARGO_ADMIN_IDS)
+    return any(cargo_id in cargos_ids for cargo_id in config_runtime.cargo_admin_ids())
 
 
 def eh_admin_servidor(member: discord.Member) -> bool:
@@ -75,9 +64,9 @@ def eh_admin_servidor(member: discord.Member) -> bool:
 # Canal de log geral (todo comando/ação usado no bot é registrado aqui)
 # ====================================================================
 async def registrar_log(interaction: discord.Interaction, descricao: str) -> None:
-    """Manda uma linha de log pro canal geral (config.CANAL_LOG_COMANDOS_ID)
+    """Manda uma linha de log pro canal geral (config_runtime.canal_log_comandos())
     com quem fez o quê."""
-    canal_log = interaction.client.get_channel(config.CANAL_LOG_COMANDOS_ID)
+    canal_log = interaction.client.get_channel(config_runtime.canal_log_comandos())
     if canal_log:
         canal_origem = f" em {interaction.channel.mention}" if interaction.channel else ""
         await canal_log.send(f"🔹 {interaction.user.mention} — {descricao}{canal_origem}")
@@ -209,7 +198,7 @@ class RegistrarMetaModal(discord.ui.Modal, title="Registro de Meta"):
         await interaction.followup.send(embed=embed_usuario, file=arquivo_usuario, ephemeral=True)
 
         # Log no canal do tier correspondente, com a imagem já embutida no embed
-        canal_log = interaction.client.get_channel(CANAL_LOG_POR_TIER[self.tipo])
+        canal_log = interaction.client.get_channel(config_runtime.canal_log_tier(self.tipo))
         if canal_log:
             embed_log = montar_embed("📋 Nova Meta Registrada", discord.Color.blurple())
             arquivo_log = discord.File(io.BytesIO(dados_imagem), filename=nome_arquivo)
@@ -297,7 +286,7 @@ class PainelMetasView(discord.ui.View):
             return
 
         horas_ciclo = database.progresso_usuario(interaction.user.id, tipo, "ciclo")
-        meta = config.META_MINIMA_HORAS
+        meta = config_runtime.meta_minima_horas()
         falta = max(meta - horas_ciclo, 0)
         atingida = horas_ciclo >= meta
         proporcao = min(horas_ciclo / meta, 1.0) if meta > 0 else 0
