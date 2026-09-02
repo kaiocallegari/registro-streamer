@@ -58,7 +58,9 @@ async def enviar_painel(interaction: discord.Interaction):
             "🔄 O ranking reseta mensalmente via `/resetar_ranking`.\n\n"
             "📊 **Registrar Meta** — envie o registro da sua live.\n"
             "📈 **Meu Progresso** — veja quantas horas você já fez neste ciclo.\n"
-            "🏆 **Ver Ranking** — veja a classificação de horas de todos os criadores."
+            "🏆 **Ver Ranking** — veja a classificação de horas de todos os criadores.\n\n"
+            "⚠️ **Observação:** não envie o print cortado/incompleto — mande a "
+            "tela inteira do computador como comprovante."
         ),
         color=discord.Color.blurple(),
     )
