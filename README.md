@@ -64,6 +64,20 @@ Dentro do canal desejado (ex: `#registro-metas`), rode o comando de barra:
 
 Isso publica a mensagem com os 3 botões, exatamente como no exemplo que você mandou.
 
+## 5. Consultar o histórico de meses anteriores
+
+Como o ranking e o progresso sempre mostram só o ciclo atual, use o comando administrativo `/historico` para ver meses passados:
+
+```
+/historico
+```
+
+1. O bot mostra um menu com os **meses/anos (ciclos)** que já têm registro no banco, do mais recente para o mais antigo.
+2. Depois de escolher o mês, aparece um segundo menu para escolher o **tier** (Tier 4, 3, 2 ou 1).
+3. O bot mostra o ranking daquele mês + tier, com a mesma paginação e medalhas 🥇🥈🥉 do **Ver Ranking** normal.
+
+Se ainda não houver nenhum registro salvo, o comando avisa que o histórico está vazio em vez de mostrar um menu sem opções. Só quem tem cargo de administrador (os mesmos de `/enviar_painel`) pode usar.
+
 ## Como funciona o registro (passo a passo do usuário)
 
 1. Clica em **📊 Registrar Meta**.

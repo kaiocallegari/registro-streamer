@@ -182,26 +182,68 @@ def progresso_usuario(user_id: int, tipo: str, periodo: str = "ciclo") -> float:
 def ranking(tipo: str, periodo: str = "ciclo", limite: int = None):
     """
     Retorna lista de tuplas (user_id, total_horas) ordenada da maior
-    para a menor quantidade de horas, filtrando por tipo e período.
+    para a menor quantidade de horas, filtrando por tipo e período
+    (sempre o ciclo/semana atual).
     """
-    coluna = "ciclo" if periodo == "ciclo" else "semana"
-    valor = ciclo_atual() if periodo == "ciclo" else semana_atual()
-    limite = limite or config.TAMANHO_RANKING
+    if periodo == "ciclo":
+        return ranking_por_ciclo(tipo, ciclo_atual(), limite)
 
+    limite = limite or config.TAMANHO_RANKING
     with get_conn() as conn:
         rows = conn.execute(
-            f"""
+            """
             SELECT user_id, SUM(horas_feitas) AS total
             FROM registros
-            WHERE tipo = ? AND {coluna} = ?
+            WHERE tipo = ? AND semana = ?
             GROUP BY user_id
             ORDER BY total DESC
             LIMIT ?
             """,
-            (tipo, valor, limite),
+            (tipo, semana_atual(), limite),
         ).fetchall()
 
     return [(row["user_id"], row["total"]) for row in rows]
+
+
+def ranking_por_ciclo(tipo: str, ciclo: str, limite: int = None):
+    """
+    Igual a ranking(tipo, "ciclo"), mas para um ciclo (MM/AAAA) específico
+    em vez do ciclo atual — usado pelo /historico para consultar meses
+    anteriores.
+    """
+    limite = limite or config.TAMANHO_RANKING
+
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT user_id, SUM(horas_feitas) AS total
+            FROM registros
+            WHERE tipo = ? AND ciclo = ?
+            GROUP BY user_id
+            ORDER BY total DESC
+            LIMIT ?
+            """,
+            (tipo, ciclo, limite),
+        ).fetchall()
+
+    return [(row["user_id"], row["total"]) for row in rows]
+
+
+def listar_ciclos() -> list[str]:
+    """
+    Retorna os ciclos (MM/AAAA) que já têm registro no banco, do mais
+    recente para o mais antigo. Não dá pra ordenar isso como string
+    (ex: "12/2025" viria "maior" que "02/2026"), então ordena por
+    (ano, mês) de verdade.
+    """
+    with get_conn() as conn:
+        rows = conn.execute("SELECT DISTINCT ciclo FROM registros").fetchall()
+
+    def chave_ordenacao(ciclo: str):
+        mes, ano = ciclo.split("/")
+        return (int(ano), int(mes))
+
+    return sorted((row["ciclo"] for row in rows), key=chave_ordenacao, reverse=True)
 
 
 # ------------------------------------------------------------------

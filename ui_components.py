@@ -353,11 +353,12 @@ class RankingPaginatorView(discord.ui.View):
     """Pagina o ranking em blocos de N pessoas para aguentar comunidades grandes
     (ex: 150-200 criadores) sem estourar o limite de caracteres do Discord."""
 
-    def __init__(self, dados: list, tipo: str, periodo: str):
+    def __init__(self, dados: list, tipo: str, periodo: str, ciclo: str = None):
         super().__init__(timeout=180)
         self.dados = dados
         self.tipo = tipo
         self.periodo = periodo
+        self.ciclo = ciclo  # ciclo específico (usado pelo /historico); None = ciclo atual
         self.pagina = 0
         self.tamanho_pagina = config.TAMANHO_PAGINA_RANKING
         self.total_paginas = max(1, -(-len(dados) // self.tamanho_pagina))  # ceil
@@ -369,7 +370,7 @@ class RankingPaginatorView(discord.ui.View):
 
     def montar_embed(self) -> discord.Embed:
         rotulo_periodo = (
-            f"Ciclo {database.ciclo_atual()}"
+            f"Ciclo {self.ciclo or database.ciclo_atual()}"
             if self.periodo == "ciclo"
             else f"Semana {database.semana_atual()}"
         )
@@ -513,3 +514,55 @@ class ResetarRankingView(discord.ui.View):
             interaction,
             f"selecionou resetar **{rotulo_periodo} — {NOME_TIPO[tipo]}** (aguardando confirmação)",
         )
+
+
+# ====================================================================
+# Fluxo do comando administrativo /historico (consulta de meses anteriores)
+# ====================================================================
+class SelecionarTierHistoricoView(discord.ui.View):
+    """Segundo passo do /historico: depois de escolher o mês, escolhe o tier."""
+
+    def __init__(self, ciclo: str):
+        super().__init__(timeout=120)
+        self.ciclo = ciclo
+
+    @discord.ui.select(
+        placeholder="Escolha o tier",
+        options=[discord.SelectOption(label=NOME_TIPO[tier], value=tier) for tier in ORDEM_TIERS],
+    )
+    async def selecionar(self, interaction: discord.Interaction, select: discord.ui.Select):
+        tipo = select.values[0]
+        dados = database.ranking_por_ciclo(tipo, self.ciclo, limite=config.TAMANHO_RANKING)
+
+        paginador = RankingPaginatorView(dados, tipo, "ciclo", ciclo=self.ciclo)
+        embed = paginador.montar_embed()
+        embed.set_footer(
+            text=(embed.footer.text + " • " if embed.footer.text else "")
+            + "Só você pode ver esta mensagem"
+        )
+        await interaction.response.edit_message(content=None, embed=embed, view=paginador)
+
+        await registrar_log(
+            interaction, f"consultou o histórico **{self.ciclo} — {NOME_TIPO[tipo]}**"
+        )
+
+
+class SelecionarCicloHistoricoView(discord.ui.View):
+    """Primeiro passo do /historico: escolhe o mês/ano (ciclo) a consultar,
+    a partir dos ciclos que realmente existem no banco."""
+
+    def __init__(self, ciclos: list[str]):
+        super().__init__(timeout=120)
+        # Opções montadas em runtime (o Discord permite no máximo 25 por menu)
+        self.selecionar.options = [
+            discord.SelectOption(label=ciclo, value=ciclo, emoji="🗓️") for ciclo in ciclos[:25]
+        ]
+
+    @discord.ui.select(placeholder="Escolha o mês/ano")
+    async def selecionar(self, interaction: discord.Interaction, select: discord.ui.Select):
+        ciclo = select.values[0]
+        await interaction.response.edit_message(
+            content=f"Mês selecionado: **{ciclo}**. Agora escolha o tier:",
+            view=SelecionarTierHistoricoView(ciclo),
+        )
+        await registrar_log(interaction, f"selecionou o mês **{ciclo}** no histórico")

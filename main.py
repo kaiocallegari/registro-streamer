@@ -13,6 +13,7 @@ from admin_config import ConfigGroup
 from ui_components import (
     PainelMetasView,
     ResetarRankingView,
+    SelecionarCicloHistoricoView,
     eh_admin,
     eh_admin_servidor,
     registrar_log,
@@ -89,6 +90,35 @@ async def resetar_ranking(interaction: discord.Interaction):
         ephemeral=True,
     )
     await registrar_log(interaction, "usou **/resetar_ranking**")
+
+
+# ------------------------------------------------------------------
+# /historico — consulta o ranking de meses anteriores (uso administrativo)
+# ------------------------------------------------------------------
+@bot.tree.command(
+    name="historico",
+    description="Consulta o ranking de um mês/ano anterior específico (uso administrativo).",
+)
+async def historico(interaction: discord.Interaction):
+    if not eh_admin(interaction.user):
+        await interaction.response.send_message(
+            "❌ Você não tem permissão para usar isso.", ephemeral=True
+        )
+        return
+
+    ciclos = database.listar_ciclos()
+    if not ciclos:
+        await interaction.response.send_message(
+            "📭 Ainda não há nenhum registro salvo no banco de dados.", ephemeral=True
+        )
+        return
+
+    await interaction.response.send_message(
+        "Escolha o mês/ano que deseja consultar:",
+        view=SelecionarCicloHistoricoView(ciclos),
+        ephemeral=True,
+    )
+    await registrar_log(interaction, "usou **/historico**")
 
 
 if __name__ == "__main__":
