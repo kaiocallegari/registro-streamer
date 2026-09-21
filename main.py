@@ -9,8 +9,8 @@ from discord.ext import commands
 
 import config
 import database
-from admin_config import ConfigGroup
-from ui_components import (
+from ui import (
+    ConfigGroup,
     PainelMetasView,
     ResetarRankingView,
     SelecionarCicloHistoricoView,

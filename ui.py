@@ -1,19 +1,22 @@
 """
-ui_components.py
-------------------
+ui.py
+------
 Todos os elementos de interface (botões, formulário/modal e menus de
-seleção) usados pelo bot ficam centralizados aqui.
+seleção) usados pelo bot, incluindo o comando administrativo /config,
+ficam centralizados aqui.
 """
 
 import asyncio
 import io
 from datetime import datetime
+from typing import Optional
 
 import discord
+from discord import app_commands
 
 import config
-import config_runtime
 import database
+import utils
 
 
 # ====================================================================
@@ -41,7 +44,7 @@ async def determinar_tipo(interaction: discord.Interaction) -> str | None:
     """Descobre o tier do usuário (tier4, tier3, tier2 ou tier1) pelos cargos dele."""
     cargos_ids = [r.id for r in interaction.user.roles]
     for tier in ORDEM_TIERS:
-        if config_runtime.cargo_tier(tier) in cargos_ids:
+        if utils.cargo_tier(tier) in cargos_ids:
             return tier
     return None
 
@@ -51,7 +54,7 @@ def eh_admin(member: discord.Member) -> bool:
     if member.guild_permissions.administrator:
         return True
     cargos_ids = {r.id for r in member.roles}
-    return any(cargo_id in cargos_ids for cargo_id in config_runtime.cargo_admin_ids())
+    return any(cargo_id in cargos_ids for cargo_id in utils.cargo_admin_ids())
 
 
 def eh_admin_servidor(member: discord.Member) -> bool:
@@ -64,9 +67,9 @@ def eh_admin_servidor(member: discord.Member) -> bool:
 # Canal de log geral (todo comando/ação usado no bot é registrado aqui)
 # ====================================================================
 async def registrar_log(interaction: discord.Interaction, descricao: str) -> None:
-    """Manda uma linha de log pro canal geral (config_runtime.canal_log_comandos())
+    """Manda uma linha de log pro canal geral (utils.canal_log_comandos())
     com quem fez o quê."""
-    canal_log = interaction.client.get_channel(config_runtime.canal_log_comandos())
+    canal_log = interaction.client.get_channel(utils.canal_log_comandos())
     if canal_log:
         canal_origem = f" em {interaction.channel.mention}" if interaction.channel else ""
         await canal_log.send(f"🔹 {interaction.user.mention} — {descricao}{canal_origem}")
@@ -198,7 +201,7 @@ class RegistrarMetaModal(discord.ui.Modal, title="Registro de Meta"):
         await interaction.followup.send(embed=embed_usuario, file=arquivo_usuario, ephemeral=True)
 
         # Log no canal do tier correspondente, com a imagem já embutida no embed
-        canal_log = interaction.client.get_channel(config_runtime.canal_log_tier(self.tipo))
+        canal_log = interaction.client.get_channel(utils.canal_log_tier(self.tipo))
         if canal_log:
             embed_log = montar_embed("📋 Nova Meta Registrada", discord.Color.blurple())
             arquivo_log = discord.File(io.BytesIO(dados_imagem), filename=nome_arquivo)
@@ -286,7 +289,7 @@ class PainelMetasView(discord.ui.View):
             return
 
         horas_ciclo = database.progresso_usuario(interaction.user.id, tipo, "ciclo")
-        meta = config_runtime.meta_minima_horas()
+        meta = utils.meta_minima_horas()
         falta = max(meta - horas_ciclo, 0)
         atingida = horas_ciclo >= meta
         proporcao = min(horas_ciclo / meta, 1.0) if meta > 0 else 0
@@ -566,3 +569,406 @@ class SelecionarCicloHistoricoView(discord.ui.View):
             view=SelecionarTierHistoricoView(ciclo),
         )
         await registrar_log(interaction, f"selecionou o mês **{ciclo}** no histórico")
+
+
+# ====================================================================
+# Comando /config — painel de configuração administrativa do bot.
+# Liberado pra quem tem permissão de Administrador do servidor OU um dos
+# cargos admin extra configurados (mesma regra usada em /enviar_painel).
+# ====================================================================
+OPCOES_TIER = [app_commands.Choice(name=NOME_TIPO[t], value=t) for t in ORDEM_TIERS]
+
+
+def _construir_embed_config() -> discord.Embed:
+    """Embed com o resumo de tudo que está configurado — usado tanto pelo
+    /config ver quanto pelo painel visual /config painel."""
+    embed = discord.Embed(title="⚙️ Central de Configuração", color=discord.Color.blurple())
+
+    linhas_tier = []
+    for tier in ORDEM_TIERS:
+        cargo_id = utils.cargo_tier(tier)
+        canal_id = utils.canal_log_tier(tier)
+        linhas_tier.append(f"**{NOME_TIPO[tier]}** — cargo <@&{cargo_id}> • log <#{canal_id}>")
+    embed.add_field(name="🏷️ Tiers", value="\n".join(linhas_tier), inline=False)
+
+    admins = utils.cargo_admin_ids()
+    embed.add_field(
+        name="🛡️ Cargos admin extra",
+        value="\n".join(f"<@&{cargo_id}>" for cargo_id in admins) if admins else "Nenhum",
+        inline=False,
+    )
+
+    embed.add_field(
+        name="📋 Canal de log geral",
+        value=f"<#{utils.canal_log_comandos()}>",
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🎯 Meta mínima",
+        value=(
+            f"{utils.meta_minima_horas():g}h mensal • "
+            f"{utils.meta_minima_horas_semanal():g}h semanal"
+        ),
+        inline=False,
+    )
+    embed.set_footer(text="Só você pode ver esta mensagem")
+    return embed
+
+
+# ====================================================================
+# Painel visual (/config painel) — alternativa em botões/menus ao
+# /config <subcomando>, pra quem prefere não digitar.
+# ====================================================================
+class VoltarButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="◀️ Voltar", style=discord.ButtonStyle.secondary, row=4)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(embed=_construir_embed_config(), view=CentralConfigView())
+
+
+class EscolherCargoTierView(discord.ui.View):
+    def __init__(self, tier: str):
+        super().__init__(timeout=180)
+        self.tier = tier
+        self.select_cargo.placeholder = f"Novo cargo para {NOME_TIPO[tier]}"
+        self.add_item(VoltarButton())
+
+    @discord.ui.select(cls=discord.ui.RoleSelect, min_values=1, max_values=1)
+    async def select_cargo(self, interaction: discord.Interaction, select: discord.ui.RoleSelect):
+        cargo = select.values[0]
+        antigo = utils.cargo_tier(self.tier)
+        utils.definir_cargo_tier(self.tier, cargo.id)
+
+        await interaction.response.edit_message(embed=_construir_embed_config(), view=CargosAreaView())
+        await registrar_log(
+            interaction, f"mudou o cargo do **{NOME_TIPO[self.tier]}** de <@&{antigo}> para {cargo.mention}"
+        )
+
+
+class AdminExtraRoleSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(VoltarButton())
+
+    @discord.ui.select(
+        cls=discord.ui.RoleSelect,
+        placeholder="Selecione os cargos admin (substitui a lista atual)",
+        min_values=0,
+        max_values=25,
+    )
+    async def select_cargos(self, interaction: discord.Interaction, select: discord.ui.RoleSelect):
+        antigos = set(utils.cargo_admin_ids())
+        novos = {cargo.id for cargo in select.values}
+        utils.definir_cargo_admin_ids(list(novos))
+
+        await interaction.response.edit_message(embed=_construir_embed_config(), view=CargosAreaView())
+
+        adicionados = novos - antigos
+        removidos = antigos - novos
+        if adicionados or removidos:
+            partes = []
+            if adicionados:
+                partes.append("adicionou " + ", ".join(f"<@&{c}>" for c in adicionados))
+            if removidos:
+                partes.append("removeu " + ", ".join(f"<@&{c}>" for c in removidos))
+            await registrar_log(interaction, f"mudou os cargos admin: {' e '.join(partes)}")
+
+
+class CargosAreaView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(VoltarButton())
+
+    @discord.ui.select(
+        placeholder="Qual cargo você quer configurar?",
+        options=(
+            [
+                discord.SelectOption(label=NOME_TIPO[t], value=t, description=f"Cargo do {NOME_TIPO[t]}")
+                for t in ORDEM_TIERS
+            ]
+            + [
+                discord.SelectOption(
+                    label="Admin extra", value="admin_extra", description="Cargos com acesso administrativo"
+                )
+            ]
+        ),
+    )
+    async def selecionar(self, interaction: discord.Interaction, select: discord.ui.Select):
+        escolha = select.values[0]
+        if escolha == "admin_extra":
+            await interaction.response.edit_message(embed=_construir_embed_config(), view=AdminExtraRoleSelectView())
+        else:
+            await interaction.response.edit_message(
+                embed=_construir_embed_config(), view=EscolherCargoTierView(escolha)
+            )
+
+
+class EscolherCanalView(discord.ui.View):
+    def __init__(self, destino: str, rotulo: str):
+        super().__init__(timeout=180)
+        self.destino = destino
+        self.select_canal.placeholder = f"Novo canal para {rotulo}"
+        self.add_item(VoltarButton())
+
+    @discord.ui.select(cls=discord.ui.ChannelSelect, channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+    async def select_canal(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+        canal = select.values[0]
+
+        if self.destino == "geral":
+            antigo = utils.canal_log_comandos()
+            utils.definir_canal_log_comandos(canal.id)
+            descricao_antigo = f"<#{antigo}>"
+            rotulo = "log geral"
+        else:
+            antigo = utils.canal_log_tier(self.destino)
+            utils.definir_canal_log_tier(self.destino, canal.id)
+            descricao_antigo = f"<#{antigo}>"
+            rotulo = f"log do {NOME_TIPO[self.destino]}"
+
+        await interaction.response.edit_message(embed=_construir_embed_config(), view=CanaisAreaView())
+        await registrar_log(interaction, f"mudou o canal de {rotulo} de {descricao_antigo} para {canal.mention}")
+
+
+class CanaisAreaView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(VoltarButton())
+
+    @discord.ui.select(
+        placeholder="Qual canal você quer configurar?",
+        options=(
+            [
+                discord.SelectOption(
+                    label=f"Log {NOME_TIPO[t]}", value=t, description=f"Canal de log do {NOME_TIPO[t]}"
+                )
+                for t in ORDEM_TIERS
+            ]
+            + [
+                discord.SelectOption(
+                    label="Log geral", value="geral", description="Canal de log de todo comando/ação do bot"
+                )
+            ]
+        ),
+    )
+    async def selecionar(self, interaction: discord.Interaction, select: discord.ui.Select):
+        destino = select.values[0]
+        rotulo = "log geral" if destino == "geral" else f"log do {NOME_TIPO[destino]}"
+        await interaction.response.edit_message(
+            embed=_construir_embed_config(), view=EscolherCanalView(destino, rotulo)
+        )
+
+
+class MetaHorasModal(discord.ui.Modal, title="Meta mínima de horas"):
+    mensal = discord.ui.TextInput(label="Meta mensal (horas)", style=discord.TextStyle.short, max_length=6)
+    semanal = discord.ui.TextInput(label="Meta semanal (horas)", style=discord.TextStyle.short, max_length=6)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            novo_mensal = float(self.mensal.value.strip().replace(",", "."))
+            novo_semanal = float(self.semanal.value.strip().replace(",", "."))
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Os dois campos precisam ser números válidos. Tente novamente.", ephemeral=True
+            )
+            return
+
+        antigo_mensal = utils.meta_minima_horas()
+        antigo_semanal = utils.meta_minima_horas_semanal()
+        utils.definir_meta_minima_horas(novo_mensal)
+        utils.definir_meta_minima_horas_semanal(novo_semanal)
+
+        await interaction.response.edit_message(embed=_construir_embed_config(), view=MetasAreaView())
+        await registrar_log(
+            interaction,
+            f"mudou a meta mínima: mensal {antigo_mensal:g}h→{novo_mensal:g}h, "
+            f"semanal {antigo_semanal:g}h→{novo_semanal:g}h",
+        )
+
+
+class MetasAreaView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(VoltarButton())
+
+    @discord.ui.button(label="✏️ Editar metas", style=discord.ButtonStyle.primary, row=0)
+    async def editar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = MetaHorasModal()
+        modal.mensal.default = f"{utils.meta_minima_horas():g}"
+        modal.semanal.default = f"{utils.meta_minima_horas_semanal():g}"
+        await interaction.response.send_modal(modal)
+
+
+class CentralConfigView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+
+    @discord.ui.select(
+        placeholder="Escolha uma área",
+        options=[
+            discord.SelectOption(label="Cargos", emoji="🏷️", value="cargos", description="Cargos de tier e admin extra"),
+            discord.SelectOption(label="Canais", emoji="📋", value="canais", description="Canais de log"),
+            discord.SelectOption(label="Metas", emoji="🎯", value="metas", description="Meta mínima de horas"),
+            discord.SelectOption(label="Ver Config", emoji="📄", value="ver", description="Atualizar esta tela"),
+        ],
+    )
+    async def escolher(self, interaction: discord.Interaction, select: discord.ui.Select):
+        area = select.values[0]
+        vistas = {
+            "cargos": CargosAreaView,
+            "canais": CanaisAreaView,
+            "metas": MetasAreaView,
+            "ver": CentralConfigView,
+        }
+        await interaction.response.edit_message(embed=_construir_embed_config(), view=vistas[area]())
+
+
+class ConfigGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(name="config", description="Configurações administrativas do bot.")
+
+    async def _checar_admin(self, interaction: discord.Interaction) -> bool:
+        if not eh_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para usar isso.", ephemeral=True
+            )
+            return False
+        return True
+
+    @app_commands.command(name="ver", description="Mostra a configuração atual do bot.")
+    async def ver(self, interaction: discord.Interaction):
+        if not await self._checar_admin(interaction):
+            return
+        await interaction.response.send_message(embed=_construir_embed_config(), ephemeral=True)
+
+    @app_commands.command(name="painel", description="Abre o painel visual de configuração do bot.")
+    async def painel(self, interaction: discord.Interaction):
+        if not await self._checar_admin(interaction):
+            return
+        await interaction.response.send_message(
+            embed=_construir_embed_config(), view=CentralConfigView(), ephemeral=True
+        )
+
+    @app_commands.command(name="cargo-tier", description="Define qual cargo representa um tier.")
+    @app_commands.describe(tier="Qual tier", cargo="Cargo do Discord")
+    @app_commands.choices(tier=OPCOES_TIER)
+    async def cargo_tier(
+        self, interaction: discord.Interaction, tier: app_commands.Choice[str], cargo: discord.Role
+    ):
+        if not await self._checar_admin(interaction):
+            return
+
+        antigo = utils.cargo_tier(tier.value)
+        utils.definir_cargo_tier(tier.value, cargo.id)
+
+        await interaction.response.send_message(
+            f"✅ Cargo do **{NOME_TIPO[tier.value]}** agora é {cargo.mention}.", ephemeral=True
+        )
+        await registrar_log(
+            interaction,
+            f"mudou o cargo do **{NOME_TIPO[tier.value]}** de <@&{antigo}> para {cargo.mention}",
+        )
+
+    @app_commands.command(name="canal-log-tier", description="Define o canal de log de um tier.")
+    @app_commands.describe(tier="Qual tier", canal="Canal de texto")
+    @app_commands.choices(tier=OPCOES_TIER)
+    async def canal_log_tier(
+        self,
+        interaction: discord.Interaction,
+        tier: app_commands.Choice[str],
+        canal: discord.TextChannel,
+    ):
+        if not await self._checar_admin(interaction):
+            return
+
+        antigo = utils.canal_log_tier(tier.value)
+        utils.definir_canal_log_tier(tier.value, canal.id)
+
+        await interaction.response.send_message(
+            f"✅ Canal de log do **{NOME_TIPO[tier.value]}** agora é {canal.mention}.",
+            ephemeral=True,
+        )
+        await registrar_log(
+            interaction,
+            f"mudou o canal de log do **{NOME_TIPO[tier.value]}** de <#{antigo}> para {canal.mention}",
+        )
+
+    @app_commands.command(name="canal-logs", description="Define o canal de log geral do bot.")
+    @app_commands.describe(canal="Canal de texto")
+    async def canal_logs(self, interaction: discord.Interaction, canal: discord.TextChannel):
+        if not await self._checar_admin(interaction):
+            return
+
+        antigo = utils.canal_log_comandos()
+        utils.definir_canal_log_comandos(canal.id)
+
+        await interaction.response.send_message(
+            f"✅ Canal de log geral agora é {canal.mention}.", ephemeral=True
+        )
+        await registrar_log(interaction, f"mudou o canal de log geral de <#{antigo}> para {canal.mention}")
+
+    @app_commands.command(
+        name="cargo-admin-adicionar", description="Autoriza um cargo a usar comandos administrativos."
+    )
+    @app_commands.describe(cargo="Cargo do Discord")
+    async def cargo_admin_adicionar(self, interaction: discord.Interaction, cargo: discord.Role):
+        if not await self._checar_admin(interaction):
+            return
+
+        utils.adicionar_cargo_admin(cargo.id)
+
+        await interaction.response.send_message(
+            f"✅ {cargo.mention} agora pode usar comandos administrativos.", ephemeral=True
+        )
+        await registrar_log(interaction, f"adicionou {cargo.mention} como cargo admin")
+
+    @app_commands.command(
+        name="cargo-admin-remover", description="Remove a autorização administrativa de um cargo."
+    )
+    @app_commands.describe(cargo="Cargo do Discord")
+    async def cargo_admin_remover(self, interaction: discord.Interaction, cargo: discord.Role):
+        if not await self._checar_admin(interaction):
+            return
+
+        utils.remover_cargo_admin(cargo.id)
+
+        await interaction.response.send_message(
+            f"✅ {cargo.mention} não é mais um cargo admin.", ephemeral=True
+        )
+        await registrar_log(interaction, f"removeu {cargo.mention} como cargo admin")
+
+    @app_commands.command(
+        name="meta-horas", description="Define a meta mínima de horas mensal e/ou semanal."
+    )
+    @app_commands.describe(
+        mensal="Nova meta mensal em horas (deixe vazio pra não mudar)",
+        semanal="Nova meta semanal em horas (deixe vazio pra não mudar)",
+    )
+    async def meta_horas(
+        self,
+        interaction: discord.Interaction,
+        mensal: Optional[float] = None,
+        semanal: Optional[float] = None,
+    ):
+        if not await self._checar_admin(interaction):
+            return
+
+        if mensal is None and semanal is None:
+            await interaction.response.send_message(
+                "❌ Informe ao menos um valor (mensal ou semanal).", ephemeral=True
+            )
+            return
+
+        partes = []
+        if mensal is not None:
+            antigo = utils.meta_minima_horas()
+            utils.definir_meta_minima_horas(mensal)
+            partes.append(f"mensal de {antigo:g}h para {mensal:g}h")
+        if semanal is not None:
+            antigo = utils.meta_minima_horas_semanal()
+            utils.definir_meta_minima_horas_semanal(semanal)
+            partes.append(f"semanal de {antigo:g}h para {semanal:g}h")
+
+        await interaction.response.send_message(f"✅ Meta atualizada ({' e '.join(partes)}).", ephemeral=True)
+        await registrar_log(interaction, f"mudou a meta mínima: {' e '.join(partes)}")

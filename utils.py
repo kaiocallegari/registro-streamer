@@ -1,6 +1,6 @@
 """
-config_runtime.py
--------------------
+utils.py
+---------
 Resolve as configurações administráveis pelo comando /config: um valor
 salvo no banco (editado pelo painel administrativo) tem prioridade; se
 não houver override, cai no padrão definido em config.py.
